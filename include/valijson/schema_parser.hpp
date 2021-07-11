@@ -609,6 +609,29 @@ private:
             updatedScope = currentScope;
         }
 
+        if ((itr = object.find("type")) != object.end()) {
+            rootSchema.addConstraintToSubschema(
+                    makeTypeConstraint(rootSchema, rootNode, itr->second, updatedScope, nodePath + "/type", fetchDoc,
+                            docCache, schemaCache),
+                    &subschema);
+        }
+
+        if ((itr = object.find("required")) != object.end()) {
+            if (m_version == kDraft3) {
+                if (parentSubschema && ownName) {
+                    opt::optional<constraints::RequiredConstraint> constraint =
+                            makeRequiredConstraintForSelf(itr->second, *ownName);
+                    if (constraint) {
+                        rootSchema.addConstraintToSubschema(*constraint, parentSubschema);
+                    }
+                } else {
+                    throwRuntimeError("'required' constraint not valid here");
+                }
+            } else {
+                rootSchema.addConstraintToSubschema(makeRequiredConstraint(itr->second), &subschema);
+            }
+        }
+
         if ((itr = object.find("allOf")) != object.end()) {
             rootSchema.addConstraintToSubschema(
                     makeAllOfConstraint(rootSchema, rootNode, itr->second,
@@ -882,35 +905,12 @@ private:
             }
         }
 
-        if ((itr = object.find("required")) != object.end()) {
-            if (m_version == kDraft3) {
-                if (parentSubschema && ownName) {
-                    opt::optional<constraints::RequiredConstraint> constraint =
-                            makeRequiredConstraintForSelf(itr->second, *ownName);
-                    if (constraint) {
-                        rootSchema.addConstraintToSubschema(*constraint, parentSubschema);
-                    }
-                } else {
-                    throwRuntimeError("'required' constraint not valid here");
-                }
-            } else {
-                rootSchema.addConstraintToSubschema(makeRequiredConstraint(itr->second), &subschema);
-            }
-        }
-
         if ((itr = object.find("title")) != object.end()) {
             if (itr->second.maybeString()) {
                 rootSchema.setSubschemaTitle(&subschema, itr->second.asString());
             } else {
                 throwRuntimeError("'title' attribute should have a string value");
             }
-        }
-
-        if ((itr = object.find("type")) != object.end()) {
-            rootSchema.addConstraintToSubschema(
-                    makeTypeConstraint(rootSchema, rootNode, itr->second, updatedScope, nodePath + "/type", fetchDoc,
-                            docCache, schemaCache),
-                    &subschema);
         }
 
         if ((itr = object.find("uniqueItems")) != object.end()) {
