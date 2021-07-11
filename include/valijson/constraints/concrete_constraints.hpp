@@ -936,22 +936,40 @@ private:
  */
 class PropertiesConstraint: public BasicConstraint<PropertiesConstraint>
 {
+    struct Property
+    {
+        String           name;
+        bool             required = false;
+
+        bool operator<(const Property& pr) const
+        {
+            if (name == pr.name) {
+                return false;
+            }
+            if (required == pr.required) {
+                return name < pr.name;
+            }
+            return !required;
+        }
+    };
+
 public:
     PropertiesConstraint()
-      : m_properties(std::less<String>(), m_allocator),
-        m_patternProperties(std::less<String>(), m_allocator),
+      : m_properties(m_allocator),
+        m_patternProperties(m_allocator),
         m_additionalProperties(nullptr) { }
 
     PropertiesConstraint(CustomAlloc allocFn, CustomFree freeFn)
       : BasicConstraint(allocFn, freeFn),
-        m_properties(std::less<String>(), m_allocator),
-        m_patternProperties(std::less<String>(), m_allocator),
+        m_properties(m_allocator),
+        m_patternProperties(m_allocator),
         m_additionalProperties(nullptr) { }
 
     bool addPatternPropertySubschema(const char *patternProperty, const Subschema *subschema)
     {
-        return m_patternProperties.insert(PropertySchemaMap::value_type(
-                String(patternProperty, m_allocator), subschema)).second;
+        Property p;
+        p.name = String(patternProperty, m_allocator);
+        return m_patternProperties.insert(PropertySchemaMap::value_type(p, subschema)).second;
     }
 
     template<typename AllocatorType>
@@ -963,18 +981,22 @@ public:
     }
 
     bool addPropertySubschema(const char *propertyName,
-            const Subschema *subschema)
+            const Subschema *subschema,
+            bool required)
     {
-        return m_properties.insert(PropertySchemaMap::value_type(
-                String(propertyName, m_allocator), subschema)).second;
+        Property p;
+        p.name = String(propertyName, m_allocator);
+        p.required = required;
+        return m_properties.insert(PropertySchemaMap::value_type(p, subschema)).second;
     }
 
     template<typename AllocatorType>
     bool addPropertySubschema(const std::basic_string<char,
             std::char_traits<char>, AllocatorType> &propertyName,
-            const Subschema *subschema)
+            const Subschema *subschema,
+            bool required)
     {
-        return addPropertySubschema(propertyName.c_str(), subschema);
+        return addPropertySubschema(propertyName.c_str(), subschema, required);
     }
 
     template<typename FunctorType>
@@ -982,7 +1004,7 @@ public:
     {
         typedef typename PropertySchemaMap::value_type ValueType;
         for (const ValueType &value : m_patternProperties) {
-            if (!fn(value.first, value.second)) {
+            if (!fn(value.first.name, value.second)) {
                 return;
             }
         }
@@ -993,7 +1015,7 @@ public:
     {
         typedef typename PropertySchemaMap::value_type ValueType;
         for (const ValueType &value : m_properties) {
-            if (!fn(value.first, value.second)) {
+            if (!fn(value.first.name, value.second)) {
                 return;
             }
         }
@@ -1011,10 +1033,10 @@ public:
 
 private:
     typedef std::map<
-            String,
+            Property,
             const Subschema *,
-            std::less<String>,
-            internal::CustomAllocator<std::pair<const String, const Subschema *>>
+            std::less<Property>,
+            internal::CustomAllocator<std::pair<const Property, const Subschema *>>
         > PropertySchemaMap;
 
     PropertySchemaMap m_properties;
