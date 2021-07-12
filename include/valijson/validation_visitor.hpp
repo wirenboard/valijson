@@ -17,13 +17,51 @@ namespace valijson {
 
 class ValidationResults;
 
+/// Typedef for a function that can be applied by validation strategy
+/// to each of the Constraint instances owned by a Schema.
+typedef std::function<bool (const Subschema::Constraint &)> ApplyFunction;
+
+/**
+ * @brief   Strategy that stops node validation on first failed constraint
+ */
+class ValidationStrategyStrict
+{
+public:
+    bool apply(const std::vector<const Subschema::Constraint *> &constraints, ApplyFunction& applyFunction)
+    {
+        for (const Subschema::Constraint *constraint : constraints) {
+            if (!applyFunction(*constraint)) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+/**
+ * @brief   Strategy that checks all constraints regardless of validation result
+ */
+class ValidationStrategyAll
+{
+public:
+    bool apply(const std::vector<const Subschema::Constraint *> &constraints, ApplyFunction& applyFunction)
+    {
+        bool allTrue = true;
+        for (const Subschema::Constraint *constraint : constraints) {
+            allTrue = allTrue && applyFunction(*constraint);
+        }
+
+        return allTrue;
+    }
+};
+
 /**
  * @brief   Implementation of the ConstraintVisitor interface that validates a
  *          target document
  *
  * @tparam  AdapterType  Adapter type for the target document.
  */
-template<typename AdapterType>
+template<typename AdapterType, typename ValidationStrategyType = ValidationStrategyAll>
 class ValidationVisitor: public constraints::ConstraintVisitor
 {
 public:
@@ -77,26 +115,14 @@ public:
         // Wrap the validationCallback() function below so that it will be
         // passed a reference to a constraint (_1), and a reference to the
         // visitor (*this).
-        Subschema::ApplyFunction fn(std::bind(validationCallback, std::placeholders::_1, std::ref(*this)));
+        ApplyFunction fn(std::bind(validationCallback, std::placeholders::_1, std::ref(*this)));
 
-        // Perform validation against each constraint defined in the schema
         if (m_results == nullptr) {
-            // The applyStrict() function will return immediately if the
-            // callback function returns false
-            if (!subschema.applyStrict(fn)) {
-                return false;
-            }
-        } else {
-            // The apply() function will iterate over all constraints in the
-            // schema, even if the callback function returns false. Once
-            // iteration is complete, the apply() function will return true
-            // only if all invokations of the callback function returned true.
-            if (!subschema.apply(fn)) {
-                return false;
-            }
+            ValidationStrategyStrict strategy;
+            return strategy.apply(subschema.getConstraints(), fn);
         }
-
-        return true;
+        ValidationStrategyType strategy;
+        return strategy.apply(subschema.getConstraints(), fn);
     }
 
     /**
@@ -150,7 +176,7 @@ public:
         ValidationResults newResults;
         ValidationResults *childResults = (m_results) ? &newResults : nullptr;
 
-        ValidationVisitor<AdapterType> v(m_target, m_context, m_strictTypes, childResults, m_regexesCache);
+        ValidationVisitor v(m_target, m_context, m_strictTypes, childResults, m_regexesCache);
         constraint.applyToSubschemas(
                 ValidateSubschemas(m_target, m_context, false, true, v, childResults, &numValidated, nullptr));
 
@@ -416,7 +442,7 @@ public:
                     std::vector<std::string> newContext = m_context;
                     newContext.push_back("[" + std::to_string(index) + "]");
 
-                    ValidationVisitor<AdapterType> validator(*itr, newContext, m_strictTypes, m_results, m_regexesCache);
+                    ValidationVisitor validator(*itr, newContext, m_strictTypes, m_results, m_regexesCache);
 
                     if (!validator.validateSchema(*additionalItemsSubschema)) {
                         if (m_results) {
@@ -792,7 +818,7 @@ public:
             return false;
         }
 
-        ValidationVisitor<AdapterType> v(m_target, m_context, m_strictTypes, nullptr, m_regexesCache);
+        ValidationVisitor v(m_target, m_context, m_strictTypes, nullptr, m_regexesCache);
         if (v.validateSchema(*subschema)) {
             if (m_results) {
                 m_results->pushError(m_context,
@@ -819,7 +845,7 @@ public:
         ValidationResults newResults;
         ValidationResults *childResults = (m_results) ? &newResults : nullptr;
 
-        ValidationVisitor<AdapterType> v(m_target, m_context, m_strictTypes, childResults, m_regexesCache);
+        ValidationVisitor v(m_target, m_context, m_strictTypes, childResults, m_regexesCache);
         constraint.applyToSubschemas(
                 ValidateSubschemas(m_target, m_context, true, true, v, childResults, &numValidated, nullptr));
 
@@ -1004,7 +1030,7 @@ public:
 
         for (const typename AdapterType::ObjectMember m : m_target.asObject()) {
             adapters::StdStringAdapter stringAdapter(m.first);
-            ValidationVisitor<adapters::StdStringAdapter> validator(stringAdapter, m_context, m_strictTypes, nullptr, m_regexesCache);
+            ValidationVisitor<adapters::StdStringAdapter, ValidationStrategyType> validator(stringAdapter, m_context, m_strictTypes, nullptr, m_regexesCache);
             if (!validator.validateSchema(*constraint.getSubschema())) {
                 return false;
             }
@@ -1073,7 +1099,7 @@ public:
             newContext.push_back("[" + std::to_string(index) + "]");
 
             // Create a validator for the current array item
-            ValidationVisitor<AdapterType> validationVisitor(item, newContext, m_strictTypes, m_results, m_regexesCache);
+            ValidationVisitor validationVisitor(item, newContext, m_strictTypes, m_results, m_regexesCache);
 
             // Perform validation
             if (!validationVisitor.validateSchema(*itemsSubschema)) {
@@ -1768,7 +1794,7 @@ private:
      *
      * @return  true if the visitor returns successfully, false otherwise.
      */
-    static bool validationCallback(const constraints::Constraint &constraint, ValidationVisitor<AdapterType> &visitor)
+    static bool validationCallback(const constraints::Constraint &constraint, ValidationVisitor<AdapterType, ValidationStrategyType> &visitor)
     {
         return constraint.accept(visitor);
     }

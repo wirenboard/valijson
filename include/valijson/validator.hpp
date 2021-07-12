@@ -53,12 +53,12 @@ public:
      *
      * @returns  true if validation succeeds, false otherwise
      */
-    template<typename AdapterType>
+    template<typename AdapterType, typename ValidationStrategyType = ValidationStrategyAll>
     bool validate(const Subschema &schema, const AdapterType &target,
             ValidationResults *results)
     {
         // Construct a ValidationVisitor to perform validation at the root level
-        ValidationVisitor<AdapterType> v(target,
+        ValidationVisitor<AdapterType, ValidationStrategyType> v(target,
                 std::vector<std::string>(1, "<root>"), strictTypes, results, regexesCache);
 
         return v.validateSchema(schema);
