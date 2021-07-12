@@ -15,6 +15,7 @@
 #include <valijson/constraint_builder.hpp>
 #include <valijson/schema.hpp>
 #include <valijson/exceptions.hpp>
+#include <unordered_set>
 
 namespace valijson {
 
@@ -609,6 +610,58 @@ private:
             updatedScope = currentScope;
         }
 
+        if ((itr = object.find("type")) != object.end()) {
+            rootSchema.addConstraintToSubschema(
+                    makeTypeConstraint(rootSchema, rootNode, itr->second, updatedScope, nodePath + "/type", fetchDoc,
+                            docCache, schemaCache),
+                    &subschema);
+        }
+
+        std::unordered_set<std::string> requiredProperties;
+        if ((itr = object.find("required")) != object.end()) {
+            if (m_version == kDraft3) {
+                if (parentSubschema && ownName) {
+                    opt::optional<constraints::RequiredConstraint> constraint =
+                            makeRequiredConstraintForSelf(itr->second, *ownName);
+                    if (constraint) {
+                        rootSchema.addConstraintToSubschema(*constraint, parentSubschema);
+                    }
+                } else {
+                    throwRuntimeError("'required' constraint not valid here");
+                }
+            } else {
+                auto constraint(makeRequiredConstraint(itr->second));
+                constraint.applyToRequiredProperties([&](const constraints::RequiredConstraint::String& property) {
+                    requiredProperties.insert(property.c_str());
+                    return true;
+                });
+                rootSchema.addConstraintToSubschema(constraint, &subschema);
+            }
+        }
+
+        {
+            // Check for schema keywords that require the creation of a
+            // PropertiesConstraint instance.
+            const typename AdapterType::Object::const_iterator
+                propertiesItr = object.find("properties"),
+                patternPropertiesItr = object.find("patternProperties"),
+                additionalPropertiesItr = object.find("additionalProperties");
+            if (object.end() != propertiesItr ||
+                object.end() != patternPropertiesItr ||
+                object.end() != additionalPropertiesItr) {
+                rootSchema.addConstraintToSubschema(
+                        makePropertiesConstraint(rootSchema, rootNode,
+                                propertiesItr != object.end() ? &propertiesItr->second : nullptr,
+                                patternPropertiesItr != object.end() ? &patternPropertiesItr->second : nullptr,
+                                additionalPropertiesItr != object.end() ? &additionalPropertiesItr->second : nullptr,
+                                updatedScope, nodePath + "/properties",
+                                nodePath + "/patternProperties",
+                                nodePath + "/additionalProperties",
+                                fetchDoc, &subschema, docCache, schemaCache, requiredProperties),
+                        &subschema);
+            }
+        }
+
         if ((itr = object.find("allOf")) != object.end()) {
             rootSchema.addConstraintToSubschema(
                     makeAllOfConstraint(rootSchema, rootNode, itr->second,
@@ -848,29 +901,6 @@ private:
                     makePatternConstraint(itr->second), &subschema);
         }
 
-        {
-            // Check for schema keywords that require the creation of a
-            // PropertiesConstraint instance.
-            const typename AdapterType::Object::const_iterator
-                propertiesItr = object.find("properties"),
-                patternPropertiesItr = object.find("patternProperties"),
-                additionalPropertiesItr = object.find("additionalProperties");
-            if (object.end() != propertiesItr ||
-                object.end() != patternPropertiesItr ||
-                object.end() != additionalPropertiesItr) {
-                rootSchema.addConstraintToSubschema(
-                        makePropertiesConstraint(rootSchema, rootNode,
-                                propertiesItr != object.end() ? &propertiesItr->second : nullptr,
-                                patternPropertiesItr != object.end() ? &patternPropertiesItr->second : nullptr,
-                                additionalPropertiesItr != object.end() ? &additionalPropertiesItr->second : nullptr,
-                                updatedScope, nodePath + "/properties",
-                                nodePath + "/patternProperties",
-                                nodePath + "/additionalProperties",
-                                fetchDoc, &subschema, docCache, schemaCache),
-                        &subschema);
-            }
-        }
-
         if ((itr = object.find("propertyNames")) != object.end()) {
             if (m_version == kDraft7) {
                 rootSchema.addConstraintToSubschema(
@@ -882,35 +912,12 @@ private:
             }
         }
 
-        if ((itr = object.find("required")) != object.end()) {
-            if (m_version == kDraft3) {
-                if (parentSubschema && ownName) {
-                    opt::optional<constraints::RequiredConstraint> constraint =
-                            makeRequiredConstraintForSelf(itr->second, *ownName);
-                    if (constraint) {
-                        rootSchema.addConstraintToSubschema(*constraint, parentSubschema);
-                    }
-                } else {
-                    throwRuntimeError("'required' constraint not valid here");
-                }
-            } else {
-                rootSchema.addConstraintToSubschema(makeRequiredConstraint(itr->second), &subschema);
-            }
-        }
-
         if ((itr = object.find("title")) != object.end()) {
             if (itr->second.maybeString()) {
                 rootSchema.setSubschemaTitle(&subschema, itr->second.asString());
             } else {
                 throwRuntimeError("'title' attribute should have a string value");
             }
-        }
-
-        if ((itr = object.find("type")) != object.end()) {
-            rootSchema.addConstraintToSubschema(
-                    makeTypeConstraint(rootSchema, rootNode, itr->second, updatedScope, nodePath + "/type", fetchDoc,
-                            docCache, schemaCache),
-                    &subschema);
         }
 
         if ((itr = object.find("uniqueItems")) != object.end()) {
@@ -2027,7 +2034,8 @@ private:
         const typename FunctionPtrs<AdapterType>::FetchDoc fetchDoc,
         const Subschema *parentSubschema,
         typename DocumentCache<AdapterType>::Type &docCache,
-        SchemaCache &schemaCache)
+        SchemaCache &schemaCache,
+        const std::unordered_set<std::string> &requiredProperties)
     {
         typedef typename AdapterType::ObjectMember Member;
 
@@ -2042,7 +2050,7 @@ private:
                         rootSchema, rootNode, m.second, currentScope, childPath,
                         fetchDoc, parentSubschema, &property, docCache,
                         schemaCache);
-                constraint.addPropertySubschema(property, subschema);
+                constraint.addPropertySubschema(property, subschema, requiredProperties.count(property));
             }
         }
 
