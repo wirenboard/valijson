@@ -891,7 +891,7 @@ private:
 
         if ((itr = object.find("oneOf")) != object.end()) {
             rootSchema.addConstraintToSubschema(
-                    makeOneOfConstraint(rootSchema, rootNode, itr->second, updatedScope, nodePath + "/oneOf", fetchDoc,
+                    makeHintedOneOfConstraint(rootSchema, rootNode, itr->second, updatedScope, nodePath + "/oneOf", fetchDoc,
                             docCache, schemaCache),
                     &subschema);
         }
@@ -1960,6 +1960,86 @@ private:
                 rootSchema, rootNode, schemaNode, currentScope, childPath,
                 fetchDoc, nullptr, nullptr, docCache, schemaCache);
             constraint.addSubschema(subschema);
+            index++;
+        }
+
+        return constraint;
+    }
+
+
+    template<typename AdapterType>
+    AdapterType getProperty(const AdapterType& node, const std::string& property)
+    {
+        auto item = node.asObject();
+        auto it = item.find(property);
+        if (it == item.end()) {
+            throw std::runtime_error("Invalid path");
+        }
+        return it->second;
+    }
+
+    /**
+     * @brief   Make a new HintedOneOfConstraint object
+     *
+     * @param   rootSchema    The Schema instance, and root subschema, through
+     *                        which other subschemas can be created and modified
+     * @param   rootNode      Reference to the node from which JSON References
+     *                        will be resolved when they refer to the current
+     *                        document; used for recursive parsing of schemas
+     * @param   node          JSON node containing an array of child schemas
+     * @param   currentScope  URI for current resolution scope
+     * @param   nodePath      JSON Pointer representing path to current node
+     * @param   fetchDoc      Function to fetch remote JSON documents (optional)
+     * @param   docCache      Cache of resolved and fetched remote documents
+     * @param   schemaCache   Cache of populated schemas
+     *
+     * @return  pointer to a new OneOfConstraint that belongs to the caller
+     */
+    template<typename AdapterType>
+    constraints::HintedOneOfConstraint makeHintedOneOfConstraint(
+        Schema &rootSchema,
+        const AdapterType &rootNode,
+        const AdapterType &node,
+        const opt::optional<std::string> currentScope,
+        const std::string &nodePath,
+        const typename FunctionPtrs<AdapterType>::FetchDoc fetchDoc,
+        typename DocumentCache<AdapterType>::Type &docCache,
+        SchemaCache &schemaCache)
+    {
+        constraints::HintedOneOfConstraint constraint;
+        auto array = node.getArray();
+
+        std::string hintKey;
+        try {
+            if (array.size()) {
+                auto requiredArray = getProperty(*array.begin(), "required").getArray();
+                if (requiredArray.size()) {
+                    hintKey = requiredArray.begin()->asString();
+                    constraint.setHintKey(hintKey);
+                }
+            }
+        } catch(...) {}
+
+        int index = 0;
+        for (const AdapterType schemaNode : array) {
+            const std::string childPath = nodePath + "/" + std::to_string(index);
+            const Subschema *subschema = makeOrReuseSchema<AdapterType>(
+                rootSchema, rootNode, schemaNode, currentScope, childPath,
+                fetchDoc, nullptr, nullptr, docCache, schemaCache);
+
+            try {
+                auto hintProp = getProperty(getProperty(schemaNode, "properties"), hintKey);
+                auto type = getProperty(hintProp, "type");
+                if (type.asString() == "string") {
+                    for (const auto& item: getProperty(hintProp, "enum").getArray()) {
+                        constraint.addHintedSubschema(item.asString(), subschema);
+                    }
+                } else {
+                    constraint.addSubschema(subschema);
+                }
+            } catch (...) {
+                constraint.addSubschema(subschema);
+            }
             index++;
         }
 

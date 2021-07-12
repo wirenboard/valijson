@@ -23,6 +23,7 @@ class MultipleOfDoubleConstraint;
 class MultipleOfIntConstraint;
 class NotConstraint;
 class OneOfConstraint;
+class HintedOneOfConstraint;
 class PatternConstraint;
 class PolyConstraint;
 class PropertiesConstraint;
@@ -59,6 +60,7 @@ protected:
     typedef constraints::MultipleOfIntConstraint MultipleOfIntConstraint;
     typedef constraints::NotConstraint NotConstraint;
     typedef constraints::OneOfConstraint OneOfConstraint;
+    typedef constraints::HintedOneOfConstraint HintedOneOfConstraint;
     typedef constraints::PatternConstraint PatternConstraint;
     typedef constraints::PolyConstraint PolyConstraint;
     typedef constraints::PropertiesConstraint PropertiesConstraint;
@@ -90,6 +92,7 @@ public:
     virtual bool visit(const MultipleOfIntConstraint &) = 0;
     virtual bool visit(const NotConstraint &) = 0;
     virtual bool visit(const OneOfConstraint &) = 0;
+    virtual bool visit(const HintedOneOfConstraint &) = 0;
     virtual bool visit(const PatternConstraint &) = 0;
     virtual bool visit(const PolyConstraint &) = 0;
     virtual bool visit(const PropertiesConstraint &) = 0;

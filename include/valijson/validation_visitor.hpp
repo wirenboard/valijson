@@ -872,6 +872,57 @@ public:
     }
 
     /**
+     * @brief   Validate a value against a HintedOneOfConstraint
+     *
+     * @param   constraint  Constraint that the target must validate against
+     *
+     * @return  \c true if the constraint is satisfied; \c false otherwise
+     */
+    bool visit(const HintedOneOfConstraint &constraint) override
+    {
+        std::string hint;
+        if (!constraint.getKey().empty()) {
+            const typename AdapterType::Object object = m_target.asObject();
+            auto itr = object.find(constraint.getKey().c_str());
+            if (itr != object.end()) {
+                if (itr->second.isString()) {
+                    hint = itr->second.asString();
+                }
+            }
+        }
+
+        unsigned int numValidated = 0;
+
+        ValidationResults newResults;
+        ValidationResults *childResults = (m_results) ? &newResults : nullptr;
+
+        ValidationVisitor v(m_target, m_context, m_strictTypes, childResults, m_regexesCache);
+        constraint.applyToSubschemas(
+                ValidateSubschemas(m_target, m_context, true, true, v, childResults, &numValidated, nullptr), hint);
+
+        if (numValidated == 0) {
+            if (m_results) {
+                ValidationResults::Error childError;
+                while (childResults->popError(childError)) {
+                    m_results->pushError(
+                            childError.context,
+                            childError.description);
+                }
+                m_results->pushError(m_context, "Failed to validate against any "
+                        "child schemas allowed by oneOf constraint.");
+            }
+            return false;
+        } else if (numValidated != 1) {
+            if (m_results) {
+                m_results->pushError(m_context, "Failed to validate against exactly one child schema.");
+            }
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * @brief   Validate a value against a PatternConstraint
      *
      * @param   constraint  Constraint that the target must validate against

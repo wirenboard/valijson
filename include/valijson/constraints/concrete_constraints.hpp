@@ -854,6 +854,76 @@ private:
 };
 
 /**
+ * @brief   Represents a special version of 'oneOf' constraint.
+ */
+class HintedOneOfConstraint: public BasicConstraint<HintedOneOfConstraint>
+{
+public:
+    HintedOneOfConstraint()
+      : m_subschemas(Allocator::rebind<const Subschema *>::other(m_allocator)) { }
+
+    HintedOneOfConstraint(CustomAlloc allocFn, CustomFree freeFn)
+      : BasicConstraint(allocFn, freeFn),
+        m_subschemas(Allocator::rebind<const Subschema *>::other(m_allocator)) { }
+
+    void addSubschema(const Subschema *subschema)
+    {
+        m_subschemas.push_back(subschema);
+    }
+
+    template<typename StringType>
+    void setHintKey(const StringType& key)
+    {
+        m_key = String(key.c_str(), m_allocator);
+    }
+
+    const String& getKey() const
+    {
+        return m_key;
+    }
+
+    template<typename StringType>
+    void addHintedSubschema(const StringType& hint, const Subschema *subschema)
+    {
+        m_hintedSubschemas.insert(HintedSubschemas::value_type(String(hint.c_str(), m_allocator), subschema));
+    }
+
+    template<typename FunctorType, typename StringType>
+    void applyToSubschemas(const FunctorType &fn, const StringType& hint) const
+    {
+        unsigned int index = 0;
+        if (!m_key.empty() && !hint.empty()) {
+            String value(hint.c_str(), m_allocator);
+            HintedSubschemas::const_iterator itr = m_hintedSubschemas.find(value);
+            if (itr != m_hintedSubschemas.end()) {
+                if (!fn(index, itr->second)) {
+                    return;
+                }
+                index++;
+            }
+        }
+        for (const Subschema *subschema : m_subschemas) {
+            if (!fn(index, subschema)) {
+                return;
+            }
+            index++;
+        }
+    }
+
+private:
+    typedef std::vector<const Subschema *, internal::CustomAllocator<const Subschema *>> Subschemas;
+    typedef std::map<String, const Subschema *, std::less<String>,
+            internal::CustomAllocator<std::pair<String, const Subschema *>>> HintedSubschemas;
+
+    /// Collection of sub-schemas, exactly one of which must be satisfied
+    Subschemas m_subschemas;
+
+    HintedSubschemas m_hintedSubschemas;
+
+    String m_key;
+};
+
+/**
  * @brief   Represents a 'pattern' constraint
  */
 class PatternConstraint: public BasicConstraint<PatternConstraint>
