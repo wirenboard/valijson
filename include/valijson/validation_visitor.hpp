@@ -881,7 +881,7 @@ public:
     bool visit(const HintedOneOfConstraint &constraint) override
     {
         std::string hint;
-        if (!constraint.getKey().empty()) {
+        if (!constraint.getKey().empty() && m_target.isObject()) {
             const typename AdapterType::Object object = m_target.asObject();
             auto itr = object.find(constraint.getKey().c_str());
             if (itr != object.end()) {
