@@ -913,7 +913,7 @@ public:
 private:
     typedef std::vector<const Subschema *, internal::CustomAllocator<const Subschema *>> Subschemas;
     typedef std::map<String, const Subschema *, std::less<String>,
-            internal::CustomAllocator<std::pair<String, const Subschema *>>> HintedSubschemas;
+            internal::CustomAllocator<std::pair<const String, const Subschema *>>> HintedSubschemas;
 
     /// Collection of sub-schemas, exactly one of which must be satisfied
     Subschemas m_subschemas;
