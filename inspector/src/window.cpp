@@ -182,8 +182,20 @@ void Window::validate()
     valijson::Validator validator;
     valijson::adapters::QtJsonAdapter adapter(m_document.object());
 
-    if (validator.validate(*m_schema, adapter, &results)) {
-        m_errors->setText("Document is valid.");
+    if (validator.validate<valijson::adapters::JsonCppAdapter, valijson::ValidationStrategyStrict>(*m_schema, adapter, &results)) {
+        std::stringstream warn_oss;
+        warn_oss << "Document is valid." << std::endl;
+        valijson::ValidationResults::Error error;
+        while (results.popError(error)) {
+            if (error.severity == valijson::ValidationResults::Error::kWarning) {
+                warn_oss << error.description << " context: ";
+                for (const auto& er: error.context) {
+                    warn_oss << er;
+                }
+                warn_oss << std::endl;
+            }
+        }
+        m_errors->setText(QString::fromStdString(warn_oss.str()));
         return;
     }
 
@@ -191,6 +203,9 @@ void Window::validate()
     unsigned int errorNum = 1;
     std::stringstream ss;
     while (results.popError(error)) {
+        if (error.severity != valijson::ValidationResults::Error::kError)
+            continue;
+
         std::string context;
         for (auto itr = error.context.begin(); itr != error.context.end(); itr++) {
             context += *itr;
