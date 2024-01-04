@@ -12,7 +12,7 @@
 #include <QToolBar>
 #include <QToolButton>
 
-#include <valijson/adapters/qtjson_adapter.hpp>
+#include <valijson/adapters/jsoncpp_adapter.hpp>
 #include <valijson/schema.hpp>
 #include <valijson/schema_parser.hpp>
 #include <valijson/validation_results.hpp>
@@ -140,7 +140,7 @@ void Window::refreshSchemaJson()
     }
 
     try {
-        valijson::adapters::QtJsonAdapter adapter(schemaDoc.object());
+        valijson::adapters::JsonCppAdapter adapter(schemaDoc.object());
         valijson::SchemaParser parser;
         delete m_schema;
         m_schema = new valijson::Schema();
@@ -180,7 +180,7 @@ void Window::validate()
 {
     valijson::ValidationResults results;
     valijson::Validator validator;
-    valijson::adapters::QtJsonAdapter adapter(m_document.object());
+    valijson::adapters::JsonCppAdapter adapter(m_document.object());
 
     if (validator.validate<valijson::adapters::JsonCppAdapter, valijson::ValidationStrategyStrict>(*m_schema, adapter, &results)) {
         std::stringstream warn_oss;

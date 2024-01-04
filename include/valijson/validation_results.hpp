@@ -38,6 +38,14 @@ public:
             kError,
             kWarning
         } severity = kError;
+
+        Error() = default;
+
+        Error(const std::vector<std::string>& ctx, const std::string& desc, Severity sev)
+            : context(ctx), description(desc), severity(sev) {}
+
+        Error(const std::vector<std::string>& ctx, const std::string& desc)
+            : context(ctx), description(desc) {}
     };
 
     /**
