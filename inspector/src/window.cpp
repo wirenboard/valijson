@@ -12,7 +12,7 @@
 #include <QToolBar>
 #include <QToolButton>
 
-#include <valijson/adapters/jsoncpp_adapter.hpp>
+#include <valijson/adapters/qtjson_adapter.hpp>
 #include <valijson/schema.hpp>
 #include <valijson/schema_parser.hpp>
 #include <valijson/validation_results.hpp>
@@ -140,7 +140,7 @@ void Window::refreshSchemaJson()
     }
 
     try {
-        valijson::adapters::JsonCppAdapter adapter(schemaDoc.object());
+        valijson::adapters::QtJsonAdapter adapter(schemaDoc.object());
         valijson::SchemaParser parser;
         delete m_schema;
         m_schema = new valijson::Schema();
@@ -180,22 +180,10 @@ void Window::validate()
 {
     valijson::ValidationResults results;
     valijson::Validator validator;
-    valijson::adapters::JsonCppAdapter adapter(m_document.object());
+    valijson::adapters::QtJsonAdapter adapter(m_document.object());
 
-    if (validator.validate<valijson::adapters::JsonCppAdapter, valijson::ValidationStrategyStrict>(*m_schema, adapter, &results)) {
-        std::stringstream warn_oss;
-        warn_oss << "Document is valid." << std::endl;
-        valijson::ValidationResults::Error error;
-        while (results.popError(error)) {
-            if (error.severity == valijson::ValidationResults::Error::kWarning) {
-                warn_oss << error.description << " context: ";
-                for (const auto& er: error.context) {
-                    warn_oss << er;
-                }
-                warn_oss << std::endl;
-            }
-        }
-        m_errors->setText(QString::fromStdString(warn_oss.str()));
+    if (validator.validate(*m_schema, adapter, &results)) {
+        m_errors->setText("Document is valid.");
         return;
     }
 
@@ -203,9 +191,6 @@ void Window::validate()
     unsigned int errorNum = 1;
     std::stringstream ss;
     while (results.popError(error)) {
-        if (error.severity != valijson::ValidationResults::Error::kError)
-            continue;
-
         std::string context;
         for (auto itr = error.context.begin(); itr != error.context.end(); itr++) {
             context += *itr;
