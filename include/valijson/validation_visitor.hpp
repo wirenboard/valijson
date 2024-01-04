@@ -1051,6 +1051,10 @@ public:
                 std::vector<std::string> newContext = m_context;
                 newContext.push_back("[" + m.first + "]");
 
+                if (m_results) {
+                    m_results->pushWarning(m_context, "Unknown property '" + m.first + "'");
+                }
+
                 // Create a validator to validate the property's value
                 ValidationVisitor validator(m.second, newContext, m_strictTypes, m_results, m_regexesCache);
                 if (!validator.validateSchema(*additionalPropertiesSubschema)) {
