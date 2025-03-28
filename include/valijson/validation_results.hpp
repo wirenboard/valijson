@@ -31,6 +31,21 @@ public:
 
         /// A detailed description of the validation error.
         std::string description;
+
+        /// Severity of the error
+        enum Severity
+        {
+            kError,
+            kWarning
+        } severity = kError;
+
+        Error() = default;
+
+        Error(const std::vector<std::string>& ctx, const std::string& desc, Severity sev)
+            : context(ctx), description(desc), severity(sev) {}
+
+        Error(const std::vector<std::string>& ctx, const std::string& desc)
+            : context(ctx), description(desc) {}
     };
 
     /**
@@ -96,6 +111,12 @@ public:
         error = m_errors.front();
         m_errors.pop_front();
         return true;
+    }
+
+    void
+    pushWarning(const std::vector<std::string> &context, const std::string &description)
+    {
+        m_errors.push_back({context, description, Error::kWarning});
     }
 
 private:
